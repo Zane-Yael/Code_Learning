@@ -390,6 +390,48 @@
         </Group>
         <Group>
           <GroupName>Driver</GroupName>
+          <Files>
+            <File>
+              <FileName>key.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Driver\key.c</FilePath>
+            </File>
+            <File>
+              <FileName>key.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Driver\key.h</FilePath>
+            </File>
+            <File>
+              <FileName>led.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Driver\led.c</FilePath>
+            </File>
+            <File>
+              <FileName>led.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Driver\led.h</FilePath>
+            </File>
+            <File>
+              <FileName>seg.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Driver\seg.c</FilePath>
+            </File>
+            <File>
+              <FileName>seg.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Driver\seg.h</FilePath>
+            </File>
+            <File>
+              <FileName>init.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Driver\init.c</FilePath>
+            </File>
+            <File>
+              <FileName>init.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Driver\init.h</FilePath>
+            </File>
+          </Files>
         </Group>
       </Groups>
     </Target>
