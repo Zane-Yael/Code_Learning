@@ -1,0 +1,77 @@
+C51 COMPILER V9.60.7.0   ULTRASONIC                                                        06/14/2025 19:55:16 PAGE 1   
+
+
+C51 COMPILER V9.60.7.0, COMPILATION OF MODULE ULTRASONIC
+OBJECT MODULE PLACED IN .\Objects\ultrasonic.obj
+COMPILER INVOKED BY: F:\keil_5\C51\BIN\C51.EXE ..\Driver\ultrasonic.c OPTIMIZE(8,SPEED) BROWSE INCDIR(..\Driver) DEBUG O
+                    -BJECTEXTEND PRINT(.\Listings\ultrasonic.lst) TABS(2) OBJECT(.\Objects\ultrasonic.obj)
+
+line level    source
+
+   1          #include "ultrasonic.h"
+   2          #include "intrins.h"
+   3          sbit US_TX = P1^0;
+   4          sbit US_RX = P1^1;
+   5          
+   6          void Delay12us(void)  //@12.000MHz
+   7          {
+   8   1        unsigned char data i;
+   9   1      
+  10   1        _nop_();
+  11   1        i = 3;
+  12   1        while (--i);
+  13   1      }
+  14          
+  15          void Ultrasonic_Init()
+  16          {
+  17   1        unsigned char i;
+  18   1        for(i = 0;i < 8;i++)
+  19   1        {
+  20   2          US_TX = 1;
+  21   2          Delay12us();
+  22   2          US_TX = 0;
+  23   2          Delay12us();
+  24   2        }
+  25   1      }
+  26          
+  27          unsigned char Ultrasonic_Read()
+  28          {
+  29   1        unsigned int time;//"int"!!
+  30   1        
+  31   1        CMOD = 0x00;
+  32   1        CH = CL = 0;
+  33   1        
+  34   1        EA = 0;
+  35   1        Ultrasonic_Init();
+  36   1        EA = 1;
+  37   1        
+  38   1        CR = 1;
+  39   1        while(US_RX && !CF);
+  40   1        CR = 0;
+  41   1        if(!CF)
+  42   1        {
+  43   2          time = (CH << 8 | CL);
+  44   2          return (time * 0.017);
+  45   2        }
+  46   1        else
+  47   1        {
+  48   2          CF = 0;
+  49   2          return 0;
+  50   2        }
+  51   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+C51 COMPILER V9.60.7.0   ULTRASONIC                                                        06/14/2025 19:55:16 PAGE 2   
+
+   CODE SIZE        =     83    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

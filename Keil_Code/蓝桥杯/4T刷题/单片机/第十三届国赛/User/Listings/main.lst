@@ -1,0 +1,445 @@
+C51 COMPILER V9.60.7.0   MAIN                                                              06/14/2025 12:40:58 PAGE 1   
+
+
+C51 COMPILER V9.60.7.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN .\Objects\main.obj
+COMPILER INVOKED BY: F:\keil_5\C51\BIN\C51.EXE main.c OPTIMIZE(8,SPEED) BROWSE INCDIR(..\Driver) DEBUG OBJECTEXTEND PRIN
+                    -T(.\Listings\main.lst) TABS(2) OBJECT(.\Objects\main.obj)
+
+line level    source
+
+   1          #include <STC15F2K60S2.H>
+   2          #include "init.h"
+   3          #include "led.h"
+   4          #include "key.h"
+   5          #include "seg.h"
+   6          
+   7          #include "ultrasonic.h"
+   8          #include "iic.h"
+   9          
+  10          /*======Variables And Parameters======*/
+  11          //led
+  12          pdata unsigned char Led_Buf[8] = {0,0,0,0,0,0,0,0};
+  13          bit Led_1_Flag;
+  14          bit Led_2_Flag;
+  15          bit Led_3_Flag;
+  16          idata unsigned char Led_1_Time_100ms;
+  17          idata unsigned char Led_2_Time_100ms;
+  18          idata unsigned char Led_3_Time_100ms;
+  19          //key
+  20          idata unsigned char Key_Val,Key_Down,Key_Up,Key_Old;
+  21          idata unsigned char Key_Slow_Down;
+  22          bit Long_Process_Flag;
+  23          idata unsigned int Process_Time_1s;
+  24          //seg
+  25          pdata unsigned char Seg_Buf[8] = {10,10,10,10,10,10,10,10};
+  26          idata unsigned char Seg_Pos;
+  27          idata unsigned char Seg_Slow_Down;
+  28          idata unsigned char Seg_Disp_Mode;//0-频率 1-湿度 2-测距 3-参数
+  29          idata unsigned char Parameters_Mode;//0-frep 1-humidity 2-distance
+  30          //ultrasonic
+  31          idata unsigned char temp;
+  32          idata unsigned char Distance;
+  33          bit Distance_Flag;//0-cm 1-m
+  34          idata unsigned char Distance_Para = 6;
+  35          idata unsigned char Distance_Slow_Down;
+  36          //Frep
+  37          idata unsigned int Frep_Hz;
+  38          idata unsigned int Frep_KHz_x10;
+  39          idata unsigned char Frep_KHz_x10_Para = 90;
+  40          bit Frep_Flag;//0-hz 1-khz
+  41          idata unsigned int Time_1s;
+  42          //AD_DA
+  43          idata unsigned char AD_DA_Slow_Down;
+  44          //Humidity
+  45          idata unsigned char Humidity;
+  46          idata unsigned char Humidity_Para = 40;
+  47          //Relay
+  48          idata unsigned char Relay_Num;
+  49          bit Relay_Work,Relay_Work_Old;
+  50          //pwm
+  51          data unsigned char pwm_period;
+  52          data unsigned char pwm_compare = 0;
+  53          /*======Key======*/
+  54          void Key_Proc()
+C51 COMPILER V9.60.7.0   MAIN                                                              06/14/2025 12:40:58 PAGE 2   
+
+  55          {
+  56   1        if(Key_Slow_Down < 20) return;
+  57   1        Key_Slow_Down = 0;
+  58   1        
+  59   1        Key_Val = Key_Read();
+  60   1        Key_Down = Key_Val & (Key_Old ^ Key_Val);
+  61   1        Key_Up = ~Key_Val & (Key_Old ^ Key_Val);
+  62   1        Key_Old = Key_Val;
+  63   1        
+  64   1        if(Seg_Disp_Mode == 1)
+  65   1        {
+  66   2          if(Key_Down == 7)
+  67   2            Long_Process_Flag = 1;
+  68   2          if(Key_Up == 7)
+  69   2          {
+  70   3            if(Process_Time_1s >= 1000)
+  71   3            {
+  72   4              Relay_Num = 0;
+  73   4              EEPROM_Write(&Relay_Num,0,1);
+  74   4            }
+  75   3            Long_Process_Flag = 0;
+  76   3          }
+  77   2        }
+  78   1        switch(Key_Down)
+  79   1        {
+  80   2          case 4://界面切换
+  81   2            Seg_Disp_Mode = (++Seg_Disp_Mode) % 4;
+  82   2          if(Seg_Disp_Mode == 3)
+  83   2            Parameters_Mode = 0;
+  84   2          break;
+  85   2          case 5://参数界面切换
+  86   2            if(Seg_Disp_Mode == 3)
+  87   2              Parameters_Mode = (++Parameters_Mode) % 3;
+  88   2          break;
+  89   2          case 6://加
+  90   2            if(Parameters_Mode == 0)
+  91   2            {
+  92   3              Frep_KHz_x10_Para += 5;
+  93   3              if(Frep_KHz_x10_Para == 125)
+  94   3                Frep_KHz_x10_Para = 10;
+  95   3            }
+  96   2            else if(Parameters_Mode == 1)
+  97   2            {
+  98   3              Humidity_Para += 10;
+  99   3              if(Humidity_Para == 70)
+ 100   3                Humidity_Para = 10;
+ 101   3            }
+ 102   2            else
+ 103   2            {
+ 104   3              if(++Distance_Para == 13)
+ 105   3                Distance_Para = 1;
+ 106   3            }
+ 107   2            if(Seg_Disp_Mode == 2)
+ 108   2              Distance_Flag ^= 1;
+ 109   2          break;
+ 110   2          case 7://减
+ 111   2            if(Parameters_Mode == 0)
+ 112   2            {
+ 113   3              Frep_KHz_x10_Para -= 5;
+ 114   3              if(Frep_KHz_x10_Para == 5)
+ 115   3                Frep_KHz_x10_Para = 120;
+ 116   3            }
+C51 COMPILER V9.60.7.0   MAIN                                                              06/14/2025 12:40:58 PAGE 3   
+
+ 117   2            else if(Parameters_Mode == 1)
+ 118   2            {
+ 119   3              Humidity_Para -= 10;
+ 120   3              if(Humidity_Para == 0)
+ 121   3                Humidity_Para = 60;
+ 122   3            }
+ 123   2            else
+ 124   2            {
+ 125   3              if(--Distance_Para == 0)
+ 126   3                Distance_Para = 12;
+ 127   3            }
+ 128   2            if(Seg_Disp_Mode == 0)
+ 129   2              Frep_Flag ^= 1;
+ 130   2          break;
+ 131   2        }
+ 132   1      }
+ 133          /*======Seg======*/
+ 134          void Seg_Proc()
+ 135          {
+ 136   1        if(Seg_Slow_Down < 60) return;
+ 137   1        Seg_Slow_Down = 0;
+ 138   1        
+ 139   1        switch(Seg_Disp_Mode)
+ 140   1        {
+ 141   2          case 0://frep
+ 142   2            Seg_Buf[0] = 11;
+ 143   2            Seg_Buf[1] = 10;
+ 144   2            if(Frep_Flag)
+ 145   2            {
+ 146   3              Seg_Buf[2] =  10;
+ 147   3              Seg_Buf[3] =  10;
+ 148   3              Seg_Buf[4] =  10;
+ 149   3              Seg_Buf[5] = (Frep_KHz_x10 > 100)?Frep_KHz_x10 / 100 % 10:10;
+ 150   3              Seg_Buf[6] = (Frep_KHz_x10 / 10 % 10) + '.';
+ 151   3              Seg_Buf[7] = Frep_KHz_x10 % 10;
+ 152   3            }
+ 153   2            else
+ 154   2            {
+ 155   3              Seg_Buf[2] = (Frep_Hz > 100000) ? Frep_Hz / 100000 % 10 : 10;
+ 156   3              Seg_Buf[3] = (Frep_Hz > 10000) ? Frep_Hz / 10000 % 10 : 10;
+ 157   3              Seg_Buf[4] = (Frep_Hz > 1000) ? Frep_Hz / 1000 % 10 : 10;
+ 158   3              Seg_Buf[5] = (Frep_Hz > 100) ? Frep_Hz / 100 % 10 : 10;
+ 159   3              Seg_Buf[6] = (Frep_Hz > 10) ? Frep_Hz / 10 % 10 : 10;
+ 160   3              Seg_Buf[7] = Frep_Hz % 10;
+ 161   3            }
+ 162   2          break;
+ 163   2          case 1://humidity
+ 164   2            Seg_Buf[0] = 12;
+ 165   2            Seg_Buf[1] = 10;
+ 166   2            Seg_Buf[2] = 10;
+ 167   2            Seg_Buf[3] = 10;
+ 168   2            Seg_Buf[4] = 10;
+ 169   2            Seg_Buf[5] = 10;
+ 170   2            Seg_Buf[6] = Humidity / 10 % 10;
+ 171   2            Seg_Buf[7] = Humidity % 10;
+ 172   2          break;
+ 173   2          case 2://测距界面
+ 174   2            Seg_Buf[0] = 13;
+ 175   2            Seg_Buf[1] = 10;
+ 176   2            Seg_Buf[2] = 10;
+ 177   2            Seg_Buf[3] = 10;
+ 178   2            Seg_Buf[4] = 10;
+C51 COMPILER V9.60.7.0   MAIN                                                              06/14/2025 12:40:58 PAGE 4   
+
+ 179   2            if(Distance_Flag)
+ 180   2            {
+ 181   3              Seg_Buf[5] = (Distance / 100 % 10) + '.';
+ 182   3              Seg_Buf[6] = Distance / 10 % 10;
+ 183   3              Seg_Buf[7] = Distance % 10;
+ 184   3            }
+ 185   2            else
+ 186   2            {
+ 187   3              Seg_Buf[5] = (Distance > 100)?(Distance / 100 % 10):10;
+ 188   3              Seg_Buf[6] = (Distance > 10)?(Distance / 10 % 10):10;
+ 189   3              Seg_Buf[7] = Distance % 10;
+ 190   3            }
+ 191   2          break;
+ 192   2          case 3://参数界面
+ 193   2            Seg_Buf[0] = 14;
+ 194   2            Seg_Buf[1] = Parameters_Mode + 1;
+ 195   2            Seg_Buf[2] = 10;
+ 196   2            Seg_Buf[3] = 10;
+ 197   2            Seg_Buf[4] = 10;
+ 198   2            if(Parameters_Mode == 0)
+ 199   2            {
+ 200   3              Seg_Buf[5] = (Frep_KHz_x10_Para > 100)?Frep_KHz_x10_Para / 100 % 10:10;
+ 201   3              Seg_Buf[6] = (Frep_KHz_x10_Para / 10 % 10) + '.';
+ 202   3              Seg_Buf[7] = Frep_KHz_x10_Para % 10;
+ 203   3            }
+ 204   2            else if(Parameters_Mode == 1)
+ 205   2            {
+ 206   3              Seg_Buf[5] = 10;
+ 207   3              Seg_Buf[6] = Humidity_Para / 10 % 10;
+ 208   3              Seg_Buf[7] = Humidity_Para % 10;
+ 209   3            }
+ 210   2            else
+ 211   2            {
+ 212   3              Seg_Buf[5] = 10;
+ 213   3              Seg_Buf[6] = (Distance_Para / 10 % 10) + '.';
+ 214   3              Seg_Buf[7] = Distance_Para % 10;
+ 215   3            }
+ 216   2          break;
+ 217   2        }
+ 218   1      }
+ 219          /*======Led======*/
+ 220          void Led_Proc()
+ 221          {
+ 222   1        if(Seg_Disp_Mode == 3)
+ 223   1        {
+ 224   2          Led_Buf[0] = Led_1_Flag;
+ 225   2          Led_Buf[1] = Led_2_Flag;
+ 226   2          Led_Buf[2] = Led_3_Flag;
+ 227   2        }
+ 228   1        else
+ 229   1        {
+ 230   2          Led_Buf[0] = (Seg_Disp_Mode == 0);
+ 231   2          Led_Buf[1] = (Seg_Disp_Mode == 1);
+ 232   2          Led_Buf[2] = (Seg_Disp_Mode == 2);
+ 233   2        }
+ 234   1        Led_Buf[3] = (Frep_KHz_x10 > Frep_KHz_x10_Para);
+ 235   1        Led_Buf[4] = (Humidity> Humidity_Para);
+ 236   1        Led_Buf[5] = (Distance > Distance_Para * 10);
+ 237   1        
+ 238   1        Relay_Work = (Distance > Distance_Para * 10);
+ 239   1        if(Relay_Work != Relay_Work_Old)
+ 240   1        {
+C51 COMPILER V9.60.7.0   MAIN                                                              06/14/2025 12:40:58 PAGE 5   
+
+ 241   2          Relay(Relay_Work);
+ 242   2          Relay_Num++;
+ 243   2          EEPROM_Write(&Relay_Num,0,1);
+ 244   2          Relay_Work_Old = Relay_Work;
+ 245   2        }
+ 246   1      }
+ 247          /*======AD_DA======*/
+ 248          void AD_DA_Proc()
+ 249          {
+ 250   1        if(AD_DA_Slow_Down < 120) return;
+ 251   1        AD_DA_Slow_Down = 0;
+ 252   1        
+ 253   1        Humidity = AD_Read(0x43) / 51.0 * 20;
+ 254   1        if(Humidity < Humidity_Para)
+ 255   1          DA_Write(51);
+ 256   1        else if(Humidity > 80)
+ 257   1          DA_Write(255);
+ 258   1        else
+ 259   1          DA_Write(51 + (((4.0/(80 - Humidity_Para))*(Humidity - Humidity_Para)))*51);
+ 260   1      }
+ 261          /*======Ultrasonic======*/
+ 262          void Ultrasonic_Proc()
+ 263          {
+ 264   1        if(Distance_Slow_Down < 120) return;
+ 265   1        Distance_Slow_Down = 0;
+ 266   1        
+ 267   1        temp = Ultrasonic_Read();
+ 268   1        if(temp != 0)
+ 269   1          Distance = temp;
+ 270   1      }
+ 271          /*======Timer_0======*/
+ 272          void Timer0_Init(void)    //1毫秒@12.000MHz
+ 273          {
+ 274   1        AUXR &= 0x7F;     //定时器时钟12T模式
+ 275   1        TMOD &= 0xF0;     //设置定时器模式
+ 276   1        TMOD |= 0x05;
+ 277   1        TL0 = 0x00;       //设置定时初始值
+ 278   1        TH0 = 0x00; //设置定时初始值
+ 279   1        TF0 = 0;        //清除TF0标志
+ 280   1        TR0 = 1;        //定时器0开始计时
+ 281   1      }
+ 282          /*======Timer_1======*/
+ 283          void Timer1_Init(void)    //1毫秒@12.000MHz
+ 284          {
+ 285   1        AUXR &= 0xBF;     //定时器时钟12T模式
+ 286   1        TMOD &= 0x0F;     //设置定时器模式
+ 287   1        TL1 = 0x18;       //设置定时初始值
+ 288   1        TH1 = 0xFC;       //设置定时初始值
+ 289   1        TF1 = 0;        //清除TF1标志
+ 290   1        TR1 = 1;        //定时器1开始计时
+ 291   1        ET1 = 1;        //使能定时器1中断
+ 292   1        EA = 1;
+ 293   1      }
+ 294          
+ 295          void Timer2_Init(void)    //100微秒@12.000MHz
+ 296          {
+ 297   1        AUXR &= 0xFB;     //定时器时钟12T模式
+ 298   1        T2L = 0x9C;       //设置定时初始值
+ 299   1        T2H = 0xFF;       //设置定时初始值
+ 300   1        AUXR |= 0x10;     //定时器2开始计时
+ 301   1        IE2 |= 0x04;      //使能定时器2中断
+ 302   1        EA = 1;
+C51 COMPILER V9.60.7.0   MAIN                                                              06/14/2025 12:40:58 PAGE 6   
+
+ 303   1      }
+ 304          /*======Timer_1_Interrupt======*/
+ 305          void Timer1_Isr(void) interrupt 3
+ 306          {
+ 307   1        Key_Slow_Down++;
+ 308   1        Seg_Slow_Down++;
+ 309   1        Distance_Slow_Down++;
+ 310   1        AD_DA_Slow_Down++;
+ 311   1        
+ 312   1        Seg_Pos = (++Seg_Pos) % 8;
+ 313   1        if(Seg_Buf[Seg_Pos] > 20)
+ 314   1          Seg_Disp(Seg_Pos,Seg_Buf[Seg_Pos] - '.',1);
+ 315   1        else
+ 316   1          Seg_Disp(Seg_Pos,Seg_Buf[Seg_Pos],0);
+ 317   1        
+ 318   1        
+ 319   1        if(++Time_1s == 1000)
+ 320   1        {
+ 321   2          Time_1s = 0;
+ 322   2          Frep_Hz = (TH0 << 8) | TL0;
+ 323   2          Frep_KHz_x10  = Frep_Hz / 100;
+ 324   2          if(Frep_KHz_x10 > Frep_KHz_x10_Para)
+ 325   2            pwm_compare = 8;
+ 326   2          else
+ 327   2            pwm_compare = 2;
+ 328   2          TH0 = TL0 = 0;  
+ 329   2        }
+ 330   1        if(Long_Process_Flag)
+ 331   1        {
+ 332   2          if(++Process_Time_1s == 1000)
+ 333   2            Process_Time_1s = 1001;
+ 334   2        }
+ 335   1        else
+ 336   1          Process_Time_1s = 0;
+ 337   1        if(Seg_Disp_Mode)
+ 338   1        {
+ 339   2          switch(Parameters_Mode)
+ 340   2          {
+ 341   3            case 0:
+ 342   3              Led_2_Time_100ms = 0;
+ 343   3              Led_2_Flag = 0;
+ 344   3              Led_3_Time_100ms = 0;
+ 345   3              Led_3_Flag = 0;
+ 346   3            if(++Led_1_Time_100ms == 100)
+ 347   3            {
+ 348   4              Led_1_Time_100ms = 0;
+ 349   4              Led_1_Flag ^= 1;
+ 350   4            }
+ 351   3            break;
+ 352   3            case 1:
+ 353   3              Led_1_Time_100ms = 0;
+ 354   3              Led_1_Flag = 0;
+ 355   3              Led_3_Time_100ms = 0;
+ 356   3              Led_3_Flag = 0;
+ 357   3            if(++Led_2_Time_100ms == 100)
+ 358   3            {
+ 359   4              Led_2_Time_100ms = 0;
+ 360   4              Led_2_Flag ^= 1;
+ 361   4            }
+ 362   3            break;
+ 363   3            case 2:
+ 364   3              Led_1_Time_100ms = 0;
+C51 COMPILER V9.60.7.0   MAIN                                                              06/14/2025 12:40:58 PAGE 7   
+
+ 365   3              Led_1_Flag = 0;
+ 366   3              Led_2_Time_100ms = 0;
+ 367   3              Led_2_Flag = 0;
+ 368   3            if(++Led_3_Time_100ms == 100)
+ 369   3            {
+ 370   4              Led_3_Time_100ms = 0;
+ 371   4              Led_3_Flag ^= 1;
+ 372   4            }
+ 373   3            break;
+ 374   3          }
+ 375   2        }
+ 376   1        else
+ 377   1        {
+ 378   2          Led_1_Time_100ms = 0;
+ 379   2          Led_1_Flag = 0;
+ 380   2          Led_2_Time_100ms = 0;
+ 381   2          Led_2_Flag = 0;
+ 382   2          Led_3_Time_100ms = 0;
+ 383   2          Led_3_Flag = 0;
+ 384   2        }
+ 385   1        
+ 386   1        Led_Disp(Led_Buf);
+ 387   1      }
+ 388          
+ 389          void Timer2_Isr(void) interrupt 12
+ 390          {
+ 391   1        pwm_period = (++pwm_period) % 10;
+ 392   1        Motor(pwm_period <= pwm_compare);
+ 393   1      }
+ 394          /*======Main======*/
+ 395          void main()
+ 396          {
+ 397   1        System_Init();
+ 398   1        Timer0_Init();
+ 399   1        Timer1_Init();
+ 400   1        Timer2_Init();
+ 401   1        while(1)
+ 402   1        {
+ 403   2          Key_Proc();
+ 404   2          Seg_Proc();
+ 405   2          Led_Proc();
+ 406   2          AD_DA_Proc();
+ 407   2          Ultrasonic_Proc();
+ 408   2        }
+ 409   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   1884    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =     16    ----
+   DATA SIZE        =      2    ----
+   IDATA SIZE       =     29    ----
+   BIT SIZE         =      8    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
